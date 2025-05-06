@@ -1,6 +1,5 @@
 // Standalone API handler for Vercel serverless functions
 import express, { Request, Response, NextFunction } from 'express';
-import session from 'express-session';
 import { drizzle } from "drizzle-orm/neon-http";  // Change to neon-http for compatibility
 import { neon } from '@neondatabase/serverless';
 import { eq } from "drizzle-orm";
@@ -8,6 +7,7 @@ import * as argon2 from 'argon2';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
 import { pgTable, text, serial, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
 
 //-----------------------------------------------------------
@@ -322,6 +322,58 @@ export const createInitialUserState = (id: number, username: string): GameUser =
 });
 
 //-----------------------------------------------------------
+// JWT AUTHENTICATION
+//-----------------------------------------------------------
+
+// JWT Secret key
+const JWT_SECRET = process.env.JWT_SECRET || 'solo-leveling-jwt-secret';
+
+// JWT Token expiration (7 days)
+const JWT_EXPIRES_IN = '7d';
+
+// Generate JWT token for a user
+const generateToken = (userId: number): string => {
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+};
+
+// Verify JWT token
+const verifyToken = (token: string): { userId: number } | null => {
+  try {
+    return jwt.verify(token, JWT_SECRET) as { userId: number };
+  } catch (error) {
+    return null;
+  }
+};
+
+// Authentication middleware
+const authenticate = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Get token from Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    // Extract token
+    const token = authHeader.split(' ')[1];
+    
+    // Verify token
+    const payload = verifyToken(token);
+    if (!payload) {
+      return res.status(401).json({ message: 'Invalid or expired token' });
+    }
+    
+    // Add userId to request object
+    (req as any).userId = payload.userId;
+    
+    next();
+  } catch (error) {
+    console.error('Authentication error:', error);
+    res.status(401).json({ message: 'Authentication failed' });
+  }
+};
+
+//-----------------------------------------------------------
 // EXPRESS API
 //-----------------------------------------------------------
 
@@ -351,18 +403,6 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   
   next();
 });
-
-// Session configuration
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'solo-leveling-secret-key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { 
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
-  }
-}));
 
 // Database connection
 const connectToDatabase = () => {
@@ -428,12 +468,15 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
       data: gameState
     });
     
-    // Set user in session
-    req.session.userId = user.id;
+    // Generate JWT token
+    const token = generateToken(user.id);
     
     // Return user without password
     const { password: _, ...userWithoutPassword } = user;
-    res.status(201).json(userWithoutPassword);
+    res.status(201).json({ 
+      user: userWithoutPassword,
+      token
+    });
   } catch (error: unknown) {
     console.error('Error registering user:', error);
     res.status(500).json({ 
@@ -471,12 +514,15 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Invalid username or password' });
     }
     
-    // Set user in session
-    req.session.userId = user.id;
+    // Generate JWT token
+    const token = generateToken(user.id);
     
     // Return user without password
     const { password: _, ...userWithoutPassword } = user;
-    res.status(200).json(userWithoutPassword);
+    res.status(200).json({
+      user: userWithoutPassword,
+      token
+    });
   } catch (error: unknown) {
     console.error('Error logging in user:', error);
     res.status(500).json({ 
@@ -487,26 +533,15 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 });
 
 app.post('/api/auth/logout', (req: Request, res: Response) => {
-  if (req.session) {
-    req.session.destroy((err) => {
-      if (err) {
-        return res.status(500).json({ message: 'Failed to logout' });
-      }
-      
-      res.clearCookie('connect.sid');
-      res.status(200).json({ message: 'Logged out successfully' });
-    });
-  } else {
-    res.status(200).json({ message: 'Already logged out' });
-  }
+  // With JWT, we don't need server-side logout
+  // The client should simply discard the token
+  res.status(200).json({ message: 'Logged out successfully' });
 });
 
-app.get('/api/auth/me', async (req: Request, res: Response) => {
+app.get('/api/auth/me', authenticate, async (req: Request, res: Response) => {
   try {
-    // Check if user is authenticated
-    if (!req.session || !req.session.userId) {
-      return res.status(401).json({ message: 'Not authenticated' });
-    }
+    // User is authenticated via the middleware
+    const userId = (req as any).userId;
     
     // Connect to database for this request
     const db = connectToDatabase();
@@ -515,7 +550,7 @@ app.get('/api/auth/me', async (req: Request, res: Response) => {
     }
     
     // Get user
-    const result = await db.select().from(users).where(eq(users.id, req.session.userId)).limit(1);
+    const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     const user = result[0];
     
     if (!user) {
@@ -535,12 +570,10 @@ app.get('/api/auth/me', async (req: Request, res: Response) => {
 });
 
 // Game routes
-app.get('/api/game/data', async (req: Request, res: Response) => {
+app.get('/api/game/data', authenticate, async (req: Request, res: Response) => {
   try {
-    // Check if user is authenticated
-    if (!req.session || !req.session.userId) {
-      return res.status(401).json({ message: 'Not authenticated' });
-    }
+    // User is authenticated via the middleware
+    const userId = (req as any).userId;
     
     // Connect to database for this request
     const db = connectToDatabase();
@@ -549,7 +582,7 @@ app.get('/api/game/data', async (req: Request, res: Response) => {
     }
     
     // Get game data
-    const result = await db.select().from(gameStates).where(eq(gameStates.userId, req.session.userId)).limit(1);
+    const result = await db.select().from(gameStates).where(eq(gameStates.userId, userId)).limit(1);
     
     if (!result || result.length === 0) {
       return res.status(404).json({ message: 'Game data not found' });
