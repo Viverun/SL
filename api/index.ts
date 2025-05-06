@@ -1,7 +1,8 @@
 // Standalone API handler for Vercel serverless functions
 import express, { Request, Response, NextFunction } from 'express';
 import session from 'express-session';
-import { drizzle, type DrizzleClient } from "drizzle-orm/neon-serverless";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import { NeonDatabase } from "drizzle-orm/neon-serverless";
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { eq } from "drizzle-orm";
 import * as argon2 from 'argon2';
@@ -39,7 +40,7 @@ app.use(session({
 }));
 
 // Database connection
-let db: DrizzleClient | undefined;
+let db: NeonDatabase | undefined;
 try {
   if (process.env.DATABASE_URL) {
     const sql = neon(process.env.DATABASE_URL);
