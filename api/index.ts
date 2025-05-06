@@ -598,7 +598,7 @@ app.get('/api/game/data', authenticate, async (req: Request, res: Response) => {
   }
 });
 
-// Static file serving
+// Static file serving and middleware cleanup
 app.use((req, res, next) => {
   // Allow public access to manifest and other PWA files without authentication
   if (
@@ -611,24 +611,7 @@ app.use((req, res, next) => {
     return next();
   }
   
-  // For API routes that require auth, continue with normal flow
-  if (req.path.startsWith('/api/') && !req.path.startsWith('/api/auth/')) {
-    // Check for authentication before proceeding
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Not authenticated' });
-    }
-    
-    // Extract token
-    const token = authHeader.split(' ')[1];
-    
-    // Verify token
-    const payload = verifyToken(token);
-    if (!payload) {
-      return res.status(401).json({ message: 'Invalid or expired token' });
-    }
-  }
-  
+  // For all other routes, continue with normal middleware flow
   next();
 });
 
