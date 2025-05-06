@@ -1,8 +1,8 @@
 // Standalone API handler for Vercel serverless functions
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import session from 'express-session';
-import { drizzle } from "drizzle-orm/neon-serverless";
-import { neon } from '@neondatabase/serverless';
+import { drizzle, type DrizzleClient } from "drizzle-orm/neon-serverless";
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { eq } from "drizzle-orm";
 import * as argon2 from 'argon2';
 import path from 'path';
@@ -11,6 +11,13 @@ import fs from 'fs';
 // Import local copies of schema and game logic
 import { users, gameStates } from "./lib/schema";
 import { createInitialUserState } from "./lib/game";
+
+// Add session type declaration
+declare module 'express-session' {
+  interface SessionData {
+    userId: number;
+  }
+}
 
 // Create Express app
 const app = express();
@@ -32,21 +39,22 @@ app.use(session({
 }));
 
 // Database connection
-let db;
+let db: DrizzleClient | undefined;
 try {
   if (process.env.DATABASE_URL) {
-    const sql = neon(process.env.DATABASE_URL);
+    const sql: NeonQueryFunction<false, false> = neon(process.env.DATABASE_URL);
+    // Fix type issue with drizzle initialization
     db = drizzle(sql);
     console.log('Database connection established');
   } else {
     console.warn('DATABASE_URL not found, database operations will fail');
   }
-} catch (error) {
+} catch (error: unknown) {
   console.error('Failed to connect to database:', error);
 }
 
 // Authentication routes
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', async (req: Request, res: Response) => {
   try {
     const { username, password } = req.body;
     
@@ -89,16 +97,16 @@ app.post('/api/auth/register', async (req, res) => {
     // Return user without password
     const { password: _, ...userWithoutPassword } = user;
     res.status(201).json(userWithoutPassword);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error registering user:', error);
     res.status(500).json({ 
       message: 'Internal server error during registration',
-      error: process.env.NODE_ENV === 'production' ? undefined : error.message
+      error: process.env.NODE_ENV === 'production' ? undefined : error instanceof Error ? error.message : String(error)
     });
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', async (req: Request, res: Response) => {
   try {
     const { username, password } = req.body;
     
@@ -131,13 +139,16 @@ app.post('/api/auth/login', async (req, res) => {
     // Return user without password
     const { password: _, ...userWithoutPassword } = user;
     res.status(200).json(userWithoutPassword);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error logging in user:', error);
-    res.status(500).json({ message: 'Internal server error during login' });
+    res.status(500).json({ 
+      message: 'Internal server error during login',
+      error: process.env.NODE_ENV === 'production' ? undefined : error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
-app.post('/api/auth/logout', (req, res) => {
+app.post('/api/auth/logout', (req: Request, res: Response) => {
   if (req.session) {
     req.session.destroy((err) => {
       if (err) {
@@ -152,7 +163,7 @@ app.post('/api/auth/logout', (req, res) => {
   }
 });
 
-app.get('/api/auth/me', async (req, res) => {
+app.get('/api/auth/me', async (req: Request, res: Response) => {
   try {
     // Check if user is authenticated
     if (!req.session || !req.session.userId) {
@@ -182,7 +193,7 @@ app.get('/api/auth/me', async (req, res) => {
 });
 
 // Game routes
-app.get('/api/game/data', async (req, res) => {
+app.get('/api/game/data', async (req: Request, res: Response) => {
   try {
     // Check if user is authenticated
     if (!req.session || !req.session.userId) {
@@ -212,7 +223,7 @@ app.get('/api/game/data', async (req, res) => {
 app.use(express.static(path.join(process.cwd(), 'dist/public')));
 
 // Client-side routing fallback
-app.get('*', (req, res) => {
+app.get('*', (req: Request, res: Response) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ message: 'API endpoint not found' });
   }
@@ -226,11 +237,11 @@ app.get('*', (req, res) => {
 });
 
 // Global error handler
-app.use((err, req, res, next) => {
+app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   console.error('API error:', err);
   res.status(500).json({
     message: 'Internal server error',
-    error: process.env.NODE_ENV === 'production' ? undefined : err.message
+    error: process.env.NODE_ENV === 'production' ? undefined : err instanceof Error ? err.message : String(err)
   });
 });
 
