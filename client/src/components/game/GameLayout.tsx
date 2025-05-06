@@ -50,17 +50,27 @@ const GameLayout = () => {
   };
   
   return (
-    <div className="relative h-screen flex flex-col bg-gray-950 text-gray-100 overflow-hidden">
+    <div className="relative h-screen flex flex-col overflow-hidden">
+      {/* Background with animated gradient */}
+      <div className="fixed inset-0 bg-gradient-to-br from-black via-purple-950 to-black bg-fixed">
+        {/* Decorative elements */}
+        <div className="absolute top-0 left-0 w-full h-full opacity-30 overflow-hidden">
+          <div className="absolute top-10 left-1/4 w-64 h-64 bg-purple-600/20 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-20 right-1/3 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl"></div>
+          <div className="absolute top-1/3 right-10 w-40 h-40 bg-purple-700/20 rounded-full blur-3xl"></div>
+        </div>
+      </div>
+      
       {/* Header */}
       <Header />
       
       {/* Main Content */}
-      <div className="flex flex-1 pt-14 overflow-hidden">
+      <div className="flex flex-1 pt-14 overflow-hidden relative z-10">
         {/* Sidebar */}
         <Sidebar />
         
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-thin scrollbar-track-gray-900 scrollbar-thumb-purple-700">
           <div className="max-w-6xl mx-auto">
             {renderContent()}
           </div>
