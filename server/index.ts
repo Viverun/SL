@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import path from "path";
 
 const app = express();
 app.use(express.json());
@@ -17,6 +18,17 @@ app.use(session({
     maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
   }
 }));
+
+// PWA specific routes - serve service worker and manifest at the root
+app.get('/sw.js', (req, res) => {
+  res.set('Content-Type', 'application/javascript');
+  res.sendFile(path.join(__dirname, '../dist/public/sw.js'));
+});
+
+app.get('/manifest.json', (req, res) => {
+  res.set('Content-Type', 'application/json');
+  res.sendFile(path.join(__dirname, '../dist/public/manifest.json'));
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -71,11 +83,7 @@ app.use((req, res, next) => {
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client
   const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  server.listen(port, () => {
     log(`serving on port ${port}`);
   });
 })();
