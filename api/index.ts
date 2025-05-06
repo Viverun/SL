@@ -1,9 +1,16 @@
-// Vercel serverless function entry point that forwards requests to our Express app
+// Standalone API handler for Vercel serverless deployment
 import express from 'express';
 import session from 'express-session';
-import { registerRoutes } from '../server/routes';
+import { drizzle } from "drizzle-orm/neon-serverless";
+import { neon } from '@neondatabase/serverless';
+import { eq } from "drizzle-orm";
+import * as argon2 from 'argon2';
 import path from 'path';
 import fs from 'fs';
+
+// Import schema directly to avoid cross-directory imports
+import { users, type User, type InsertUser, gameStates } from "../shared/schema";
+import { createInitialUserState } from "../shared/game";
 
 // Create Express app for serverless environment
 const app = express();
@@ -24,46 +31,198 @@ app.use(session({
   }
 }));
 
-// Register API routes
-registerRoutes(app);
-
-// Function to serve static files in the Vercel environment
-function serveStaticForVercel(app) {
+// Database connection setup
+let db;
+if (process.env.DATABASE_URL) {
   try {
-    const distPath = path.join(process.cwd(), 'dist/public');
-    
-    // Check if the directory exists
-    if (!fs.existsSync(distPath)) {
-      console.warn(`Static directory not found: ${distPath}`);
-      return;
-    }
-    
-    // Serve static files
-    app.use(express.static(distPath));
-    
-    // Fallback for client-side routing (important for SPA)
-    app.get('*', (req, res) => {
-      // Skip API routes
-      if (req.path.startsWith('/api/')) {
-        return;
-      }
-      
-      const indexPath = path.join(distPath, 'index.html');
-      if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-      } else {
-        res.status(404).send('index.html not found');
-      }
-    });
+    const sql = neon(process.env.DATABASE_URL);
+    db = drizzle(sql);
+    console.log('Database connection established');
   } catch (error) {
-    console.error('Error setting up static file serving:', error);
+    console.error('Failed to connect to database:', error);
   }
 }
 
-// Serve static files
-serveStaticForVercel(app);
+// Auth Routes
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Username and password are required' });
+    }
+    
+    // Check if DB is connected
+    if (!db) {
+      return res.status(500).json({ message: 'Database connection not available' });
+    }
+    
+    // Check if username already exists
+    const existingUser = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    if (existingUser.length > 0) {
+      return res.status(400).json({ message: 'Username already exists' });
+    }
+    
+    // Hash password
+    const hashedPassword = await argon2.hash(password);
+    
+    // Create user
+    const newUser = await db.insert(users).values({
+      username,
+      password: hashedPassword
+    }).returning();
+    
+    const user = newUser[0];
+    
+    // Create initial game state for the user
+    const gameState = createInitialUserState(user.id, user.username);
+    await db.insert(gameStates).values({
+      userId: user.id,
+      data: gameState
+    });
+    
+    // Set user in session
+    req.session.userId = user.id;
+    
+    // Return user without password
+    const { password: _, ...userWithoutPassword } = user;
+    res.status(201).json(userWithoutPassword);
+  } catch (error) {
+    console.error('Error registering user:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
 
-// Set up error handling
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Username and password are required' });
+    }
+    
+    // Check if DB is connected
+    if (!db) {
+      return res.status(500).json({ message: 'Database connection not available' });
+    }
+    
+    // Check if username exists
+    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    const user = result[0];
+    
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid username or password' });
+    }
+    
+    // Verify password
+    const isPasswordValid = await argon2.verify(user.password, password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Invalid username or password' });
+    }
+    
+    // Set user in session
+    req.session.userId = user.id;
+    
+    // Return user without password
+    const { password: _, ...userWithoutPassword } = user;
+    res.status(200).json(userWithoutPassword);
+  } catch (error) {
+    console.error('Error logging in user:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  if (req.session) {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ message: 'Failed to logout' });
+      }
+      
+      res.clearCookie('connect.sid');
+      res.status(200).json({ message: 'Logged out successfully' });
+    });
+  } else {
+    res.status(200).json({ message: 'Already logged out' });
+  }
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    // Check if user is authenticated
+    if (!req.session || !req.session.userId) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+    
+    // Check if DB is connected
+    if (!db) {
+      return res.status(500).json({ message: 'Database connection not available' });
+    }
+    
+    // Get user
+    const result = await db.select().from(users).where(eq(users.id, req.session.userId)).limit(1);
+    const user = result[0];
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Return user without password
+    const { password, ...userWithoutPassword } = user;
+    res.status(200).json(userWithoutPassword);
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Game Routes
+app.get('/api/game/data', async (req, res) => {
+  try {
+    // Check if user is authenticated
+    if (!req.session || !req.session.userId) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+    
+    // Check if DB is connected
+    if (!db) {
+      return res.status(500).json({ message: 'Database connection not available' });
+    }
+    
+    // Get game data
+    const result = await db.select().from(gameStates).where(eq(gameStates.userId, req.session.userId)).limit(1);
+    const gameState = result[0];
+    
+    if (!gameState) {
+      return res.status(404).json({ message: 'Game data not found' });
+    }
+    
+    res.status(200).json(gameState.data);
+  } catch (error) {
+    console.error('Error getting game data:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Basic static file serving for non-API routes
+app.use(express.static(path.join(process.cwd(), 'dist/public')));
+
+// Fallback for client-side routing
+app.get('*', (req, res) => {
+  // Skip API routes
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ message: 'API endpoint not found' });
+  }
+  
+  const indexPath = path.join(process.cwd(), 'dist/public/index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('index.html not found');
+  }
+});
+
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Express error:', err);
   res.status(500).json({
