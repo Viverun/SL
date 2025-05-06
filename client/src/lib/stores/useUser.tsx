@@ -62,26 +62,33 @@ export const useUser = create<UserState>((set, get) => ({
   // User authentication actions
   login: async (username, password) => {
     set({ isLoading: true, error: null });
-    
+    console.log('[useUser.login] Attempting login...');
     try {
       const res = await apiRequest('POST', '/api/auth/login', { username, password });
       const userData = await res.json();
-      
-      // Save JWT token in localStorage
       if (userData.token) {
-        saveToken(userData.token);
+        console.log('[useUser.login] Token received from API:', userData.token.substring(0,10) + '...');
+        saveToken(userData.token); // This now uses the queryClient's storeAuthToken
+        // Verify token immediately after saving
+        const verifyToken = getToken(); // This uses queryClient's getAuthToken
+        if (verifyToken === userData.token) {
+          console.log('[useUser.login] Token successfully saved and verified in localStorage.');
+        } else {
+          console.error('[useUser.login] CRITICAL: Token verification FAILED after saving. Expected:', userData.token.substring(0,10) + '...', 'Got:', verifyToken ? verifyToken.substring(0,10) + '...' : 'null');
+        }
+      } else {
+        console.error('[useUser.login] CRITICAL: No token received from login API response.');
       }
-      
       set({ 
         isAuthenticated: true,
         userId: userData.user.id, 
         username: userData.user.username,
         isLoading: false 
       });
-      
-      // After login, fetch game data
+      console.log('[useUser.login] User state updated. isAuthenticated: true.');
       await get().fetchGameData();
     } catch (err: any) {
+      console.error('[useUser.login] Login error:', err);
       set({ 
         isLoading: false, 
         error: err.message || 'Failed to login' 
@@ -92,38 +99,34 @@ export const useUser = create<UserState>((set, get) => ({
   
   register: async (username, password) => {
     set({ isLoading: true, error: null });
-    
+    console.log('[useUser.register] Attempting registration...');
     try {
-      // Register the user
       const res = await apiRequest('POST', '/api/auth/register', { username, password });
       const userData = await res.json();
-      
-      // Save JWT token in localStorage
       if (userData.token) {
-        console.log('Token from registration:', userData.token.substring(0, 10) + '...'); // Debug token
-        saveToken(userData.token);
+        console.log('[useUser.register] Token received from API:', userData.token.substring(0,10) + '...');
+        saveToken(userData.token); // Uses queryClient's storeAuthToken
+        // Verify token immediately
+        const verifyToken = getToken(); // Uses queryClient's getAuthToken
+        if (verifyToken === userData.token) {
+          console.log('[useUser.register] Token successfully saved and verified in localStorage.');
+        } else {
+          console.error('[useUser.register] CRITICAL: Token verification FAILED. Expected:', userData.token.substring(0,10) + '...', 'Got:', verifyToken ? verifyToken.substring(0,10) + '...' : 'null');
+        }
       } else {
-        console.error('No token received from registration');
+        console.error('[useUser.register] CRITICAL: No token received from registration API.');
       }
-      
       set({ 
         isAuthenticated: true,
         userId: userData.user.id, 
         username: userData.user.username,
         isLoading: false 
       });
-      
-      // Wait a moment to ensure the token is saved before fetching data
-      setTimeout(async () => {
-        try {
-          await get().fetchGameData();
-        } catch (err) {
-          console.error('Error fetching game data after registration:', err);
-        }
-      }, 500);
-      
+      console.log('[useUser.register] User state updated. isAuthenticated: true.');
+      // Delay slightly before fetching game data to ensure state propagation and token availability
+      setTimeout(() => get().fetchGameData(), 100); 
     } catch (err: any) {
-      console.error('Registration error:', err);
+      console.error('[useUser.register] Registration error:', err);
       set({ 
         isLoading: false, 
         error: err.message || 'Failed to register' 
@@ -160,27 +163,41 @@ export const useUser = create<UserState>((set, get) => ({
   // Game data actions
   fetchGameData: async () => {
     const { isAuthenticated } = get();
+    console.log(`[useUser.fetchGameData] Initiated. User isAuthenticated: ${isAuthenticated}`);
     if (!isAuthenticated) {
-      console.log('Not fetching game data - user not authenticated');
-      return;
+      console.warn('[useUser.fetchGameData] Aborting: User not authenticated.');
+      // Attempt to re-check token directly from localStorage just in case zustand state is stale
+      const directToken = localStorage.getItem('token');
+      if (directToken) {
+        console.warn('[useUser.fetchGameData] Stale state? Direct token check FOUND a token. Forcing isAuthenticated to true and retrying fetch.');
+        set({ isAuthenticated: true }); // Correct the state
+        // Proceed with fetch after state update
+        setTimeout(() => get().fetchGameData(), 0); // Re-queue the fetch
+        return;
+      } else {
+        console.warn('[useUser.fetchGameData] Direct token check also found NO token. User is definitely not authenticated.');
+        return; // Definitely not authenticated
+      }
     }
-    
     set({ isLoading: true, error: null });
-    
+    console.log('[useUser.fetchGameData] Fetching game data... Token check:', getToken() ? 'Token exists' : 'Token MISSING');
     try {
-      console.log('Fetching game data - auth token exists:', !!getToken());
-      const res = await apiRequest('GET', '/api/game/data');
+      const res = await apiRequest('GET', '/api/game/data'); // apiRequest now has detailed logging
       const gameData = await res.json();
-      
-      console.log('Game data fetched successfully');
+      console.log('[useUser.fetchGameData] Game data fetched successfully.');
       set({ gameData, isLoading: false });
     } catch (err: any) {
-      console.error('Error fetching game data:', err);
+      console.error('[useUser.fetchGameData] Error fetching game data:', err);
       set({ 
         isLoading: false, 
         error: err.message || 'Failed to fetch game data' 
       });
-      throw err;
+      // If 401, it might be a truly expired/invalid token, try to logout
+      if (err.message && err.message.includes('401')) {
+        console.warn('[useUser.fetchGameData] Received 401, attempting to clear token and logout.');
+        get().logout();
+      }
+      // Do not throw error here to prevent unhandled promise rejections if not caught by UI
     }
   },
   

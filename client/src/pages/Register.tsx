@@ -23,26 +23,31 @@ const Register = () => {
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[Register.handleSubmit] Registration form submitted.');
     
     // Basic validation
     if (!username.trim() || !password.trim()) {
       setLocalError('Username and password are required');
+      console.warn('[Register.handleSubmit] Validation failed: Username or password empty.');
       return;
     }
     
     if (password !== confirmPassword) {
       setLocalError('Passwords do not match');
+      console.warn('[Register.handleSubmit] Validation failed: Passwords do not match.');
       return;
     }
     
     if (password.length < 6) {
       setLocalError('Password must be at least 6 characters long');
+      console.warn('[Register.handleSubmit] Validation failed: Password too short.');
       return;
     }
     
     setLocalError(null);
     
     try {
+      console.log('[Register.handleSubmit] Calling direct fetch for /api/auth/register.');
       // Direct API call to ensure we get and store the token properly
       const response = await fetch('/api/auth/register', {
         method: 'POST',
@@ -54,14 +59,15 @@ const Register = () => {
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to register');
+        console.error('[Register.handleSubmit] API registration failed:', errorData);
+        throw new Error(errorData.message || 'Failed to register via API');
       }
       
       const data = await response.json();
       
       // Explicitly store token in localStorage
       if (data.token) {
-        console.log('Registration successful, storing token directly:', data.token.substring(0, 10) + '...');
+        console.log('[Register.handleSubmit] Token received from direct API call:', data.token.substring(0,10) + '...');
         
         // Store token both ways to ensure it works
         localStorage.setItem('token', data.token);
@@ -69,13 +75,19 @@ const Register = () => {
         
         // Verify token was stored
         const storedToken = localStorage.getItem('token');
-        console.log('Token storage verification:', storedToken ? 'successful' : 'failed');
+        if (storedToken === data.token) {
+          console.log('[Register.handleSubmit] Token successfully stored and verified in localStorage.');
+        } else {
+          console.error('[Register.handleSubmit] CRITICAL: Token verification FAILED after direct save. Expected:', data.token.substring(0,10) + '...', 'Got:', storedToken ? storedToken.substring(0,10) + '...' : 'null');
+        }
       } else {
-        console.error('CRITICAL: No token received from registration API');
+        console.error('[Register.handleSubmit] CRITICAL: No token received from direct /api/auth/register API call.');
       }
       
+      console.log('[Register.handleSubmit] Calling useUser.register() to update store state.');
       // Also call the store's register method to update the UI state
       await register(username, password);
+      console.log('[Register.handleSubmit] useUser.register() successful.');
       
       toast.success('Registration successful!', {
         description: 'Your hunter account has been created.',
@@ -84,10 +96,12 @@ const Register = () => {
       
       // Add a slight delay before navigation to ensure token is saved
       setTimeout(() => {
+        console.log('[Register.handleSubmit] Navigating to / after delay.');
         navigate('/');
       }, 500);
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to register. Please try again.';
+      console.error('[Register.handleSubmit] Registration failed:', errorMsg);
       setLocalError(errorMsg);
       
       toast.error('Registration failed', {

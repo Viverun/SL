@@ -51,98 +51,66 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  // Add auth token to headers if available
   const headers: Record<string, string> = {
-    'Accept': 'application/json'
+    'Accept': 'application/json',
   };
-  
+
   if (data) {
     headers["Content-Type"] = "application/json";
   }
-  
-  // Include JWT token in Authorization header - with enhanced debugging
-  try {
-    const token = getAuthToken();
-    console.log('API Request Token retrieval attempt:', token ? 'successful' : 'failed');
-    
-    if (token) {
-      // Ensure proper Bearer token format
-      headers["Authorization"] = `Bearer ${token}`;
-      console.log(`Request to ${url} with Authorization header set, token prefix: ${token.substring(0, 10)}...`);
+
+  console.log(`[apiRequest] Attempting to fetch token for URL: ${url}`);
+  const token = getAuthToken(); // Relies on localStorage.getItem
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+    console.log(`[apiRequest] Token FOUND and Authorization header SET for URL: ${url}. Token prefix: ${token.substring(0, 10)}...`);
+  } else {
+    console.warn(`[apiRequest] Token NOT FOUND for URL: ${url}. Authorization header will be MISSING.`);
+    // Forcing a check directly from localStorage again for extra debugging
+    const directTokenCheck = localStorage.getItem('token');
+    if (directTokenCheck) {
+        console.warn(`[apiRequest] Direct localStorage check FOUND a token: ${directTokenCheck.substring(0,10)}... This is unexpected if getAuthToken failed.`);
+        headers["Authorization"] = `Bearer ${directTokenCheck}`; // Attempt to use it
+        console.warn(`[apiRequest] Fallback Authorization header SET for URL: ${url}.`);
     } else {
-      console.warn(`Request to ${url} WITHOUT Authorization header - token not found in localStorage`);
-      
-      // Try direct access to localStorage as fallback
-      try {
-        const fallbackToken = localStorage.getItem('token');
-        if (fallbackToken) {
-          headers["Authorization"] = `Bearer ${fallbackToken}`;
-          console.log(`FALLBACK: Using direct localStorage token for ${url}`);
-        } else {
-          console.error('FALLBACK ALSO FAILED: No token in localStorage');
-        }
-      } catch (e) {
-        console.error('Error accessing localStorage directly:', e);
-      }
+        console.warn(`[apiRequest] Direct localStorage check also found NO token.`);
     }
-  } catch (error) {
-    console.error('Token access error:', error);
   }
-  
-  // Log complete headers for debugging
-  console.log('Complete request headers:', JSON.stringify(headers));
-  
-  // Ensure full URL is used for all environments, especially for Vercel
+
+  console.log(`[apiRequest] Final headers for ${url}: ${JSON.stringify(headers)}`);
+
   let apiUrl = url;
   if (!url.startsWith('http')) {
-    // Check if the environment is a Vercel deployment
     const isVercel = window.location.hostname.includes('vercel.app');
-    
     if (isVercel) {
-      // For Vercel deployments, ensure we use the correct format for API URLs
       if (!url.startsWith('/api/')) {
         apiUrl = `${window.location.origin}/api${url.startsWith('/') ? url : `/${url}`}`;
       } else {
         apiUrl = `${window.location.origin}${url}`;
       }
-      console.log(`Vercel environment detected - using API URL: ${apiUrl}`);
     } else {
-      // Local development
       apiUrl = `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
     }
-    console.log(`Using absolute URL for request: ${apiUrl}`);
+    console.log(`[apiRequest] Resolved API URL: ${apiUrl}`);
   }
-  
+
   try {
-    // For Vercel deployment, use specific fetch options
     const fetchOptions: RequestInit = {
       method,
       headers,
       body: data ? JSON.stringify(data) : undefined,
-      // Don't use credentials: 'same-origin' - can cause issues with Vercel
     };
     
-    console.log(`Sending ${method} request to: ${apiUrl} with options:`, 
-      JSON.stringify({
-        method: fetchOptions.method,
-        headers: fetchOptions.headers,
-        hasBody: !!fetchOptions.body
-      })
-    );
-    
+    console.log(`[apiRequest] Sending ${method} request to: ${apiUrl}. Options: ${JSON.stringify({method: fetchOptions.method, headers: fetchOptions.headers, hasBody: !!fetchOptions.body})}`);
     const res = await fetch(apiUrl, fetchOptions);
-    
-    console.log(`Response from ${url}: ${res.status} ${res.statusText}`);
-    
-    // Special handling for 401 errors
+    console.log(`[apiRequest] Response from ${url}: ${res.status} ${res.statusText}`);
     if (res.status === 401) {
-      console.error('Authentication failed - token may be invalid or missing');
-      // You could trigger a logout here or request token refresh
+      console.error('[apiRequest] Authentication failed (401). Token might be invalid, expired, or missing.');
     }
-    
     return res;
   } catch (error) {
-    console.error(`Fetch error for ${url}:`, error);
+    console.error(`[apiRequest] Fetch error for ${url}:`, error);
     throw error;
   }
 }

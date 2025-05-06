@@ -29,16 +29,19 @@ const Login = () => {
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[Login.handleSubmit] Login form submitted.');
     
     // Basic validation
     if (!username.trim() || !password.trim()) {
       setLocalError('Username and password are required');
+      console.warn('[Login.handleSubmit] Validation failed: Username or password empty.');
       return;
     }
     
     setLocalError(null);
     
     try {
+      console.log('[Login.handleSubmit] Calling useUser.login().');
       // Direct API call to get and store the token explicitly
       const response = await fetch('/api/auth/login', {
         method: 'POST',
@@ -77,15 +80,18 @@ const Login = () => {
       
       // Also call the store's login method to update UI state
       await login(username, password);
+      console.log('[Login.handleSubmit] useUser.login() successful.');
       
       toast.success(`Welcome back, ${username}!`);
       
       // Add a slight delay before navigation to ensure token is saved
       setTimeout(() => {
+        console.log('[Login.handleSubmit] Navigating to / after delay.');
         navigate('/');
       }, 500);
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to login. Please try again.';
+      console.error('[Login.handleSubmit] Login failed:', errorMsg);
       setLocalError(errorMsg);
       
       toast.error('Login failed', {
