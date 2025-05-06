@@ -8,6 +8,13 @@ import {
   DungeonRun
 } from '@shared/game';
 
+// Add Express session type declaration to include userId
+declare module 'express-session' {
+  interface SessionData {
+    userId: number;
+  }
+}
+
 // Middleware to check if user is authenticated
 export const requireAuth = (req: Request, res: Response, next: Function) => {
   if (!req.session || !req.session.userId) {
