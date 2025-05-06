@@ -1,5 +1,6 @@
 // Vercel serverless function entry point that forwards requests to our Express app
 import express from 'express';
+import session from 'express-session';
 import { registerRoutes } from '../server/routes';
 import path from 'path';
 import fs from 'fs';
@@ -7,6 +8,18 @@ import fs from 'fs';
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Session configuration for authentication - compatible with serverless environment
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'solo-leveling-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { 
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+    sameSite: 'lax'
+  }
+}));
 
 // Function to serve static files in the Vercel environment
 function serveStaticForVercel(app) {

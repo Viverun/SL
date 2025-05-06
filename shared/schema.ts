@@ -13,7 +13,7 @@ export const users = pgTable("users", {
 export const gameStates = pgTable("game_states", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id),
-  gameData: jsonb("game_data").notNull(),
+  data: jsonb("data").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

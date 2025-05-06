@@ -1,5 +1,8 @@
-import { users, type User, type InsertUser } from "@shared/schema";
+import { users, type User, type InsertUser, gameStates } from "@shared/schema";
 import { User as GameUser } from "@shared/game";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import { neon } from '@neondatabase/serverless';
+import { eq } from "drizzle-orm";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -20,54 +23,118 @@ export interface IStorage {
   createStreak(userId: number, streakData: any): Promise<GameUser>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private gameStates: Map<number, GameUser>;
-  currentId: number;
+// Database storage implementation
+export class DbStorage implements IStorage {
+  private sql;
+  private db;
 
   constructor() {
-    this.users = new Map();
-    this.gameStates = new Map();
-    this.currentId = 1;
+    // Initialize database connection
+    if (!process.env.DATABASE_URL) {
+      console.warn("DATABASE_URL not found, using in-memory storage as fallback");
+      return;
+    }
+    
+    this.sql = neon(process.env.DATABASE_URL);
+    this.db = drizzle(this.sql);
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    if (!this.db) return memStorage.getUser(id);
+    
+    try {
+      const result = await this.db.select().from(users).where(eq(users.id, id)).limit(1);
+      return result[0];
+    } catch (error) {
+      console.error("Error getting user:", error);
+      return memStorage.getUser(id);
+    }
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    if (!this.db) return memStorage.getUserByUsername(username);
+    
+    try {
+      const result = await this.db.select().from(users).where(eq(users.username, username)).limit(1);
+      return result[0];
+    } catch (error) {
+      console.error("Error getting user by username:", error);
+      return memStorage.getUserByUsername(username);
+    }
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    if (!this.db) return memStorage.createUser(insertUser);
+    
+    try {
+      const result = await this.db.insert(users).values(insertUser).returning();
+      return result[0];
+    } catch (error) {
+      console.error("Error creating user:", error);
+      return memStorage.createUser(insertUser);
+    }
   }
 
   async getUserGameState(userId: number): Promise<GameUser | undefined> {
-    return this.gameStates.get(userId);
+    if (!this.db) return memStorage.getUserGameState(userId);
+    
+    try {
+      const result = await this.db.select().from(gameStates).where(eq(gameStates.userId, userId)).limit(1);
+      return result[0]?.data;
+    } catch (error) {
+      console.error("Error getting game state:", error);
+      return memStorage.getUserGameState(userId);
+    }
   }
 
   async createUserGameState(userId: number, gameState: GameUser): Promise<void> {
-    this.gameStates.set(userId, gameState);
+    if (!this.db) return memStorage.createUserGameState(userId, gameState);
+    
+    try {
+      await this.db.insert(gameStates).values({
+        userId,
+        data: gameState as any
+      });
+    } catch (error) {
+      console.error("Error creating game state:", error);
+      return memStorage.createUserGameState(userId, gameState);
+    }
   }
 
   async updateUserGameState(userId: number, gameState: GameUser): Promise<void> {
-    this.gameStates.set(userId, gameState);
+    if (!this.db) return memStorage.updateUserGameState(userId, gameState);
+    
+    try {
+      await this.db.update(gameStates)
+        .set({ data: gameState as any })
+        .where(eq(gameStates.userId, userId));
+    } catch (error) {
+      console.error("Error updating game state:", error);
+      return memStorage.updateUserGameState(userId, gameState);
+    }
   }
 
   async resetUserGameState(userId: number, username: string): Promise<GameUser> {
+    if (!this.db) return memStorage.resetUserGameState(userId, username);
+    
     const { createInitialUserState } = await import('@shared/game');
     const newState = createInitialUserState(userId, username);
-    this.gameStates.set(userId, newState);
-    return newState;
+    
+    try {
+      await this.db.update(gameStates)
+        .set({ data: newState as any })
+        .where(eq(gameStates.userId, userId));
+      return newState;
+    } catch (error) {
+      console.error("Error resetting game state:", error);
+      return memStorage.resetUserGameState(userId, username);
+    }
   }
 
+  // For task completion methods, get the current state, update in memory, then save to database
   async completeQuestTask(userId: number, questId: string, taskId: string): Promise<{gameState: GameUser, xpGained: number}> {
+    if (!this.db) return memStorage.completeQuestTask(userId, questId, taskId);
+    
     const gameState = await this.getUserGameState(userId);
     if (!gameState) {
       throw new Error('Game state not found');
@@ -102,8 +169,8 @@ export class MemStorage implements IStorage {
         completionTime: new Date()
       });
       
-      // Update game state
-      this.gameStates.set(userId, result.user);
+      // Update game state in database
+      await this.updateUserGameState(userId, result.user);
       
       return {
         gameState: result.user,
@@ -112,7 +179,7 @@ export class MemStorage implements IStorage {
     }
 
     // If not all tasks complete, just update the task
-    this.gameStates.set(userId, gameState);
+    await this.updateUserGameState(userId, gameState);
     return {
       gameState,
       xpGained: 0
@@ -120,6 +187,8 @@ export class MemStorage implements IStorage {
   }
 
   async completeStreak(userId: number, streakId: string): Promise<{gameState: GameUser, xpGained: number}> {
+    if (!this.db) return memStorage.completeStreak(userId, streakId);
+    
     const gameState = await this.getUserGameState(userId);
     if (!gameState) {
       throw new Error('Game state not found');
@@ -133,8 +202,8 @@ export class MemStorage implements IStorage {
       completionTime: new Date()
     });
     
-    // Update game state
-    this.gameStates.set(userId, result.user);
+    // Update game state in database
+    await this.updateUserGameState(userId, result.user);
     
     return {
       gameState: result.user,
@@ -143,6 +212,8 @@ export class MemStorage implements IStorage {
   }
 
   async completeDungeon(userId: number, dungeonId: string): Promise<{gameState: GameUser, xpGained: number}> {
+    if (!this.db) return memStorage.completeDungeon(userId, dungeonId);
+    
     const gameState = await this.getUserGameState(userId);
     if (!gameState) {
       throw new Error('Game state not found');
@@ -156,8 +227,8 @@ export class MemStorage implements IStorage {
       completionTime: new Date()
     });
     
-    // Update game state
-    this.gameStates.set(userId, result.user);
+    // Update game state in database
+    await this.updateUserGameState(userId, result.user);
     
     return {
       gameState: result.user,
@@ -166,6 +237,8 @@ export class MemStorage implements IStorage {
   }
 
   async createQuest(userId: number, questData: any): Promise<GameUser> {
+    if (!this.db) return memStorage.createQuest(userId, questData);
+    
     const gameState = await this.getUserGameState(userId);
     if (!gameState) {
       throw new Error('Game state not found');
@@ -183,12 +256,14 @@ export class MemStorage implements IStorage {
       questData.deadline
     );
     
-    // Update game state
-    this.gameStates.set(userId, updatedState);
+    // Update game state in database
+    await this.updateUserGameState(userId, updatedState);
     return updatedState;
   }
 
   async createDungeon(userId: number, dungeonData: any): Promise<GameUser> {
+    if (!this.db) return memStorage.createDungeon(userId, dungeonData);
+    
     const gameState = await this.getUserGameState(userId);
     if (!gameState) {
       throw new Error('Game state not found');
@@ -203,12 +278,14 @@ export class MemStorage implements IStorage {
       dungeonData.rewards
     );
     
-    // Update game state
-    this.gameStates.set(userId, updatedState);
+    // Update game state in database
+    await this.updateUserGameState(userId, updatedState);
     return updatedState;
   }
 
   async createStreak(userId: number, streakData: any): Promise<GameUser> {
+    if (!this.db) return memStorage.createStreak(userId, streakData);
+    
     const gameState = await this.getUserGameState(userId);
     if (!gameState) {
       throw new Error('Game state not found');
@@ -221,10 +298,14 @@ export class MemStorage implements IStorage {
       streakData.description
     );
     
-    // Update game state
-    this.gameStates.set(userId, updatedState);
+    // Update game state in database
+    await this.updateUserGameState(userId, updatedState);
     return updatedState;
   }
 }
 
-export const storage = new MemStorage();
+// Keep the in-memory storage as a fallback
+const memStorage = new MemStorage();
+
+// Export the database storage implementation
+export const storage = new DbStorage();
