@@ -1,61 +1,55 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { getQueryFn, apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Shield, Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useUser } from '@/lib/stores/useUser';
 
 const Login = () => {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
   
-  // Check if user is already authenticated
-  const { data: authData, isLoading: authLoading } = useQuery({
-    queryKey: ['/api/auth/me'],
-    queryFn: getQueryFn({ on401: 'returnNull' }),
-  });
+  // User store for login
+  const { login, isAuthenticated, isLoading, error: storeError, username: currentUser } = useUser();
   
-  // If already authenticated, redirect to home
-  if (!authLoading && authData) {
-    navigate('/');
-    return null;
-  }
+  // Redirect if already logged in
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/');
+    }
+  }, [isAuthenticated, navigate]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Basic validation
     if (!username.trim() || !password.trim()) {
-      setError('Username and password are required');
+      setLocalError('Username and password are required');
       return;
     }
     
-    setIsLoading(true);
-    setError(null);
+    setLocalError(null);
     
     try {
-      // Call login API
-      const res = await apiRequest('POST', '/api/auth/login', { username, password });
-      const data = await res.json();
+      // Login using the user store
+      await login(username, password);
       
-      toast.success(`Welcome back, ${data.username}!`);
+      toast.success(`Welcome back, ${username}!`);
       navigate('/');
     } catch (err: any) {
-      setError(err.message || 'Failed to login. Please try again.');
+      const errorMsg = err.message || 'Failed to login. Please try again.';
+      setLocalError(errorMsg);
+      
       toast.error('Login failed', {
-        description: err.message || 'Please check your credentials and try again.'
+        description: errorMsg || 'Please check your credentials and try again.'
       });
-    } finally {
-      setIsLoading(false);
     }
   };
   
@@ -89,10 +83,10 @@ const Login = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
+              {(localError || storeError) && (
                 <div className="bg-red-900/20 border border-red-900/50 rounded-md p-3 flex items-start">
                   <AlertCircle className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
-                  <span className="text-sm text-red-400">{error}</span>
+                  <span className="text-sm text-red-400">{localError || storeError}</span>
                 </div>
               )}
               
