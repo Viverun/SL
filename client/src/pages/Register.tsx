@@ -136,6 +136,7 @@ const Register = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     className="bg-black/50 border-purple-900/50 text-white pr-10 focus:border-purple-500 focus:ring-purple-500/50"
                     disabled={isLoading}
+                    autoComplete="new-password"
                   />
                   <Button
                     type="button"
@@ -163,6 +164,7 @@ const Register = () => {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="bg-black/50 border-purple-900/50 text-white focus:border-purple-500 focus:ring-purple-500/50"
                   disabled={isLoading}
+                  autoComplete="new-password"
                 />
               </div>
               
