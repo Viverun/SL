@@ -350,18 +350,23 @@ const authenticate = async (req: Request, res: Response, next: NextFunction) => 
   try {
     // Get token from Authorization header
     const authHeader = req.headers.authorization;
+    console.log('Auth Header:', authHeader); // Debug line
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ message: 'Not authenticated' });
     }
 
     // Extract token
     const token = authHeader.split(' ')[1];
+    console.log('Token extracted:', token.substring(0, 10) + '...'); // Debug line - showing first 10 chars
     
     // Verify token
     const payload = verifyToken(token);
     if (!payload) {
       return res.status(401).json({ message: 'Invalid or expired token' });
     }
+    
+    console.log('Auth successful for user ID:', payload.userId); // Debug line
     
     // Add userId to request object
     (req as any).userId = payload.userId;
