@@ -42,9 +42,9 @@ app.use(session({
 let db: DrizzleClient | undefined;
 try {
   if (process.env.DATABASE_URL) {
-    const sql: NeonQueryFunction<false, false> = neon(process.env.DATABASE_URL);
-    // Fix type issue with drizzle initialization
-    db = drizzle(sql);
+    const sql = neon(process.env.DATABASE_URL);
+    // Fix the drizzle initialization with proper typing
+    db = drizzle(sql as any);
     console.log('Database connection established');
   } else {
     console.warn('DATABASE_URL not found, database operations will fail');
@@ -186,9 +186,12 @@ app.get('/api/auth/me', async (req: Request, res: Response) => {
     // Return user without password
     const { password, ...userWithoutPassword } = user;
     res.status(200).json(userWithoutPassword);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error getting current user:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ 
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'production' ? undefined : error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
@@ -213,9 +216,12 @@ app.get('/api/game/data', async (req: Request, res: Response) => {
     }
     
     res.status(200).json(result[0].data);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error getting game data:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ 
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'production' ? undefined : error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
