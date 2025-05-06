@@ -1,7 +1,7 @@
 // Standalone API handler for Vercel serverless functions
 import express, { Request, Response, NextFunction } from 'express';
 import session from 'express-session';
-import { drizzle } from "drizzle-orm/neon-serverless";
+import { drizzle } from "drizzle-orm/neon-http";  // Change to neon-http for compatibility
 import { neon } from '@neondatabase/serverless';
 import { eq } from "drizzle-orm";
 import * as argon2 from 'argon2';
@@ -372,9 +372,16 @@ const connectToDatabase = () => {
       return undefined;
     }
 
-    // Create a new connection for each request (important for serverless)
+    // The proper way to connect to Neon with Drizzle in serverless
     const sql = neon(process.env.DATABASE_URL);
-    return drizzle(sql as any);
+    
+    // We need to ensure sql is a function that takes queryString and params
+    if (typeof sql !== 'function') {
+      console.error('Neon client initialization failed');
+      return undefined;
+    }
+    
+    return drizzle(sql);
   } catch (error: unknown) {
     console.error('Failed to connect to database:', error);
     return undefined;
