@@ -28,11 +28,14 @@ export async function apiRequest(
     headers["Authorization"] = `Bearer ${token}`;
   }
   
-  const res = await fetch(url, {
+  // Ensure full URL is used
+  const apiUrl = url.startsWith('http') ? url : window.location.origin + url;
+  
+  const res = await fetch(apiUrl, {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    // Remove credentials: "include" since we're using token-based auth
   });
 
   await throwIfResNotOk(res);
@@ -54,9 +57,13 @@ export const getQueryFn: <T>(options: {
       headers["Authorization"] = `Bearer ${token}`;
     }
     
-    const res = await fetch(queryKey[0] as string, {
+    // Ensure full URL is used
+    const url = queryKey[0] as string;
+    const apiUrl = url.startsWith('http') ? url : window.location.origin + url;
+    
+    const res = await fetch(apiUrl, {
       headers,
-      credentials: "include",
+      // Remove credentials: "include" since we're using token-based auth
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
