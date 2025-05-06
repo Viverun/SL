@@ -11,36 +11,35 @@
     }
   ],
   "routes": [
-    {
+    { 
       "src": "/manifest.json",
-      "dest": "/dist/public/manifest.json",
       "headers": { "cache-control": "public, max-age=31536000, immutable" }
     },
-    {
+    { 
       "src": "/sw.js",
-      "dest": "/dist/public/sw.js",
       "headers": { "cache-control": "public, max-age=0, must-revalidate" }
     },
-    {
-      "src": "/(apple-touch-icon.png|pwa-192x192.png|pwa-512x512.png|favicon.ico)",
-      "dest": "/dist/public/$1",
+    { 
+      "src": "/(apple-touch-icon\\.png|pwa-192x192\\.png|pwa-512x512\\.png|favicon\\.ico)",
+      "headers": { "cache-control": "public, max-age=31536000, immutable" }
+    },
+    { 
+      "src": "/api/(.*)", 
+      "dest": "/api/index.ts" 
+    },
+    { 
+      "src": "/assets/(.+)", 
+      "dest": "/assets/$1", 
       "headers": { "cache-control": "public, max-age=31536000, immutable" }
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/api/index.ts"
+      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|otf|mp3|wav|ogg|gltf|glb))",
+      "dest": "/$1",
+      "headers": { "cache-control": "public, max-age=31536000, immutable" }
     },
-    {
-      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|json|svg|woff|woff2|ttf|otf|mp3|wav|ogg|gltf|glb))",
-      "dest": "/dist/public/$1"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "status": 200,
-      "dest": "/dist/public/index.html"
+    { 
+      "src": "/(.*)", 
+      "dest": "/index.html" 
     }
   ]
 }
