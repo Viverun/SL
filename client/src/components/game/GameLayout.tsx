@@ -14,6 +14,7 @@ import StreakTracker from './StreakTracker';
 import Analytics from './Analytics';
 import Settings from './Settings';
 import LevelUpNotification from './LevelUpNotification';
+import SoundControls from './SoundControls';
 
 const GameLayout = () => {
   const { activeTab } = useGameData();
@@ -79,6 +80,9 @@ const GameLayout = () => {
       
       {/* Level Up Notification */}
       <LevelUpNotification />
+      
+      {/* Sound Controls */}
+      <SoundControls />
     </div>
   );
 };
