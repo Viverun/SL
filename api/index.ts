@@ -8,9 +8,9 @@ import * as argon2 from 'argon2';
 import path from 'path';
 import fs from 'fs';
 
-// Import shared schema and game logic directly
-import { users, gameStates } from "../shared/schema";
-import { createInitialUserState } from "../shared/game";
+// Import local copies of schema and game logic
+import { users, gameStates } from "./lib/schema";
+import { createInitialUserState } from "./lib/game";
 
 // Create Express app
 const app = express();
