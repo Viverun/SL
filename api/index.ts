@@ -5,37 +5,27 @@ import { registerRoutes } from '../server/routes';
 import path from 'path';
 import fs from 'fs';
 
-// Create custom error handler to capture and log errors
-const logServerError = (err) => {
-  console.error('Server error:', err);
-  return {
-    message: 'Internal server error',
-    error: process.env.NODE_ENV === 'production' ? {} : err
-  };
-};
+// Create Express app for serverless environment
+const app = express();
 
-// Initialize Express app with error handling
-const createApp = () => {
-  const app = express();
-  
-  // Basic middleware
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: false }));
+// Basic middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
-  // Session configuration for authentication - compatible with serverless environment
-  app.use(session({
-    secret: process.env.SESSION_SECRET || 'solo-leveling-secret-key',
-    resave: false,
-    saveUninitialized: false,
-    cookie: { 
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-      sameSite: 'lax'
-    }
-  }));
+// Session configuration for serverless environment
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'solo-leveling-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { 
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+    sameSite: 'lax'
+  }
+}));
 
-  return app;
-};
+// Register API routes
+registerRoutes(app);
 
 // Function to serve static files in the Vercel environment
 function serveStaticForVercel(app) {
@@ -48,59 +38,21 @@ function serveStaticForVercel(app) {
       return;
     }
     
-    // Handle specific asset types first
-    app.use('/assets', express.static(path.join(distPath, 'assets')));
+    // Serve static files
+    app.use(express.static(distPath));
     
-    // Handle service worker and manifest specifically
-    app.get('/sw.js', (req, res) => {
-      const filePath = path.join(distPath, 'sw.js');
-      if (fs.existsSync(filePath)) {
-        res.setHeader('Content-Type', 'application/javascript');
-        res.sendFile(filePath);
-      } else {
-        res.status(404).send('Service worker not found');
-      }
-    });
-    
-    app.get('/manifest.json', (req, res) => {
-      const filePath = path.join(distPath, 'manifest.json');
-      if (fs.existsSync(filePath)) {
-        res.setHeader('Content-Type', 'application/json');
-        res.sendFile(filePath);
-      } else {
-        res.status(404).send('Manifest not found');
-      }
-    });
-    
-    // Serve other static files
-    app.use(express.static(distPath, {
-      index: false // Don't automatically serve index.html
-    }));
-    
-    // Special handling for the root path - always serve index.html
-    app.get('/', (req, res) => {
-      const indexPath = path.join(distPath, 'index.html');
-      if (fs.existsSync(indexPath)) {
-        res.setHeader('Content-Type', 'text/html');
-        res.sendFile(indexPath);
-      } else {
-        res.status(404).send('index.html not found');
-      }
-    });
-    
-    // Fallback for client-side routing
-    app.use('*', (req, res, next) => {
+    // Fallback for client-side routing (important for SPA)
+    app.get('*', (req, res) => {
       // Skip API routes
-      if (req.originalUrl.startsWith('/api/')) {
-        return next();
+      if (req.path.startsWith('/api/')) {
+        return;
       }
       
       const indexPath = path.join(distPath, 'index.html');
       if (fs.existsSync(indexPath)) {
-        res.setHeader('Content-Type', 'text/html');
         res.sendFile(indexPath);
       } else {
-        res.status(404).send('Not found: ' + indexPath);
+        res.status(404).send('index.html not found');
       }
     });
   } catch (error) {
@@ -108,32 +60,17 @@ function serveStaticForVercel(app) {
   }
 }
 
-// Create a handler for Vercel serverless deployment
-export default async function handler(req, res) {
-  try {
-    // Initialize Express app
-    const app = createApp();
-    
-    // Create Express server and register API routes
-    await registerRoutes(app);
-    
-    // Add global error handler
-    app.use((err, req, res, next) => {
-      console.error('Express error:', err);
-      res.status(500).json(logServerError(err));
-    });
-    
-    // In production, serve static files
-    serveStaticForVercel(app);
-    
-    // Process the request through Express
-    return app(req, res);
-  } catch (error) {
-    console.error('Serverless function error:', error);
-    res.status(500).json({
-      statusCode: 500,
-      message: 'Internal Server Error',
-      error: process.env.NODE_ENV === 'production' ? {} : error
-    });
-  }
-}
+// Serve static files
+serveStaticForVercel(app);
+
+// Set up error handling
+app.use((err, req, res, next) => {
+  console.error('Express error:', err);
+  res.status(500).json({
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'production' ? undefined : err.message
+  });
+});
+
+// Export the Express app as the serverless function handler
+export default app;

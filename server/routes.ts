@@ -1,5 +1,4 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import {
   registerUser,
@@ -18,7 +17,7 @@ import {
   resetGameData
 } from './controllers/game';
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export function registerRoutes(app: Express) {
   // Authentication routes
   app.post('/api/auth/register', registerUser);
   app.post('/api/auth/login', loginUser);
@@ -34,7 +33,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/game/createStreak', requireAuth, createStreak);
   app.post('/api/game/reset', requireAuth, resetGameData);
 
-  const httpServer = createServer(app);
+  // For serverless environments, we don't need to return a server
+  // In non-serverless environments, we could create and return a server
+  if (process.env.NODE_ENV !== 'production') {
+    const { createServer } = require('http');
+    return createServer(app);
+  }
 
-  return httpServer;
+  // Just return the app for serverless environments
+  return app;
 }
