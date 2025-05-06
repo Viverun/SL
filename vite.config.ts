@@ -16,6 +16,8 @@ export default defineConfig({
     glsl(), // Add GLSL shader support
     VitePWA({
       registerType: 'autoUpdate',
+      // Output manifest as manifest.json for correct routing
+      manifestFilename: 'manifest.json',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
         name: 'Historical Mystery',

@@ -20,7 +20,7 @@
       "dest": "/api/index.ts"
     },
     {
-      "src": "*/assets/(.+)",
+      "src": "/assets/(.+)",
       "dest": "/assets/$1"
     },
     {
