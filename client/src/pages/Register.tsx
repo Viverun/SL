@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
-import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Shield, Eye, EyeOff, UserPlus, AlertCircle, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useUser } from '@/lib/stores/useUser';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -15,51 +15,50 @@ const Register = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+  
+  // User store for registration and login
+  const { register, isLoading, error: storeError } = useUser();
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Basic validation
     if (!username.trim() || !password.trim()) {
-      setError('Username and password are required');
+      setLocalError('Username and password are required');
       return;
     }
     
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setLocalError('Passwords do not match');
       return;
     }
     
     if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
+      setLocalError('Password must be at least 6 characters long');
       return;
     }
     
-    setIsLoading(true);
-    setError(null);
+    setLocalError(null);
     
     try {
-      // Call register API
-      const res = await apiRequest('POST', '/api/auth/register', { username, password });
-      const data = await res.json();
+      // Register and automatically log in
+      await register(username, password);
       
       toast.success('Registration successful!', {
         description: 'Your hunter account has been created.',
         icon: <CheckCircle className="h-5 w-5 text-green-500" />
       });
       
-      // Automatically log in and redirect
-      await apiRequest('POST', '/api/auth/login', { username, password });
+      // Redirect to home page
       navigate('/');
     } catch (err: any) {
-      setError(err.message || 'Failed to register. Please try again.');
+      const errorMsg = err.message || 'Failed to register. Please try again.';
+      setLocalError(errorMsg);
+      
       toast.error('Registration failed', {
-        description: err.message || 'Please try again with a different username.'
+        description: errorMsg || 'Please try again with a different username.'
       });
-    } finally {
-      setIsLoading(false);
     }
   };
   
@@ -93,10 +92,10 @@ const Register = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
+              {(localError || storeError) && (
                 <div className="bg-red-900/20 border border-red-900/50 rounded-md p-3 flex items-start">
                   <AlertCircle className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
-                  <span className="text-sm text-red-400">{error}</span>
+                  <span className="text-sm text-red-400">{localError || storeError}</span>
                 </div>
               )}
               
