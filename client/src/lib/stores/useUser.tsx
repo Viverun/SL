@@ -1,11 +1,31 @@
 import { create } from "zustand";
 import { User } from "@shared/game";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, storeAuthToken, getAuthToken, clearAuthToken } from "@/lib/queryClient";
 
-// Helper functions for token management
-const saveToken = (token: string) => localStorage.setItem('token', token);
-const removeToken = () => localStorage.removeItem('token');
-const getToken = () => localStorage.getItem('token');
+// Use the query client's token management functions instead of local functions
+const saveToken = (token: string) => {
+  console.log('Saving token to localStorage:', token.substring(0, 10) + '...');
+  storeAuthToken(token);
+  
+  // Immediately verify the token was saved correctly
+  const savedToken = getAuthToken();
+  if (savedToken !== token) {
+    console.error('Token verification failed - saved token does not match!');
+  } else {
+    console.log('Token saved successfully and verified');
+  }
+};
+
+const removeToken = () => {
+  console.log('Removing token from localStorage');
+  clearAuthToken();
+};
+
+const getToken = () => {
+  const token = getAuthToken();
+  console.log('Retrieved token from localStorage:', token ? 'exists' : 'missing');
+  return token;
+};
 
 // Check if token exists to determine initial auth state
 const hasInitialToken = !!getToken();
@@ -80,7 +100,10 @@ export const useUser = create<UserState>((set, get) => ({
       
       // Save JWT token in localStorage
       if (userData.token) {
+        console.log('Token from registration:', userData.token.substring(0, 10) + '...'); // Debug token
         saveToken(userData.token);
+      } else {
+        console.error('No token received from registration');
       }
       
       set({ 
@@ -90,9 +113,17 @@ export const useUser = create<UserState>((set, get) => ({
         isLoading: false 
       });
       
-      // After registration, fetch game data
-      await get().fetchGameData();
+      // Wait a moment to ensure the token is saved before fetching data
+      setTimeout(async () => {
+        try {
+          await get().fetchGameData();
+        } catch (err) {
+          console.error('Error fetching game data after registration:', err);
+        }
+      }, 500);
+      
     } catch (err: any) {
+      console.error('Registration error:', err);
       set({ 
         isLoading: false, 
         error: err.message || 'Failed to register' 
@@ -129,16 +160,22 @@ export const useUser = create<UserState>((set, get) => ({
   // Game data actions
   fetchGameData: async () => {
     const { isAuthenticated } = get();
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      console.log('Not fetching game data - user not authenticated');
+      return;
+    }
     
     set({ isLoading: true, error: null });
     
     try {
+      console.log('Fetching game data - auth token exists:', !!getToken());
       const res = await apiRequest('GET', '/api/game/data');
       const gameData = await res.json();
       
+      console.log('Game data fetched successfully');
       set({ gameData, isLoading: false });
     } catch (err: any) {
+      console.error('Error fetching game data:', err);
       set({ 
         isLoading: false, 
         error: err.message || 'Failed to fetch game data' 

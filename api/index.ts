@@ -350,31 +350,54 @@ const authenticate = async (req: Request, res: Response, next: NextFunction) => 
   try {
     // Get token from Authorization header
     const authHeader = req.headers.authorization;
-    console.log('Auth Header:', authHeader); // Debug line
     
+    // Log detailed auth information for debugging
+    console.log('Auth Header:', authHeader); 
+    console.log('Request URL:', req.url);
+    console.log('Request Method:', req.method);
+    console.log('Request Origin:', req.headers.origin);
+    
+    // Check for missing or invalid auth header
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Not authenticated' });
+      console.warn('No valid auth header found for', req.url, 'with headers:', JSON.stringify(req.headers));
+      return res.status(401).json({ 
+        message: 'Not authenticated',
+        details: 'Missing or invalid Authorization header'
+      });
     }
 
     // Extract token
     const token = authHeader.split(' ')[1];
-    console.log('Token extracted:', token.substring(0, 10) + '...'); // Debug line - showing first 10 chars
-    
-    // Verify token
-    const payload = verifyToken(token);
-    if (!payload) {
-      return res.status(401).json({ message: 'Invalid or expired token' });
+    if (!token) {
+      console.warn('Token extraction failed from:', authHeader);
+      return res.status(401).json({ 
+        message: 'Not authenticated',
+        details: 'Could not extract token from Authorization header'
+      });
     }
     
-    console.log('Auth successful for user ID:', payload.userId); // Debug line
+    // Verify token - with enhanced error handling
+    const payload = verifyToken(token);
+    if (!payload) {
+      console.warn('Token verification failed for token starting with:', token.substring(0, 10));
+      return res.status(401).json({ 
+        message: 'Invalid or expired token',
+        details: 'JWT verification failed'
+      });
+    }
+    
+    console.log('Auth successful for user ID:', payload.userId, 'on endpoint:', req.url);
     
     // Add userId to request object
     (req as any).userId = payload.userId;
     
     next();
   } catch (error) {
-    console.error('Authentication error:', error);
-    res.status(401).json({ message: 'Authentication failed' });
+    console.error('Authentication middleware error:', error);
+    return res.status(500).json({ 
+      message: 'Authentication error',
+      details: process.env.NODE_ENV === 'production' ? undefined : error instanceof Error ? error.message : String(error)
+    });
   }
 };
 
@@ -407,6 +430,29 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   }
   
   next();
+});
+
+// IMPORTANT: Static files should be served before ANY other middleware
+// This ensures all static assets are accessible without authentication
+app.use(express.static(path.join(process.cwd(), 'dist/public')));
+
+// IMPORTANT: Special handling for manifest.json and service worker
+app.get('/manifest.json', (req, res) => {
+  const manifestPath = path.join(process.cwd(), 'dist/public/manifest.json');
+  if (fs.existsSync(manifestPath)) {
+    res.sendFile(manifestPath);
+  } else {
+    res.status(404).send('Manifest not found');
+  }
+});
+
+app.get('/sw.js', (req, res) => {
+  const swPath = path.join(process.cwd(), 'dist/public/sw.js');
+  if (fs.existsSync(swPath)) {
+    res.sendFile(swPath);
+  } else {
+    res.status(404).send('Service worker not found');
+  }
 });
 
 // Database connection
@@ -602,25 +648,6 @@ app.get('/api/game/data', authenticate, async (req: Request, res: Response) => {
     });
   }
 });
-
-// Static file serving and middleware cleanup
-app.use((req, res, next) => {
-  // Allow public access to manifest and other PWA files without authentication
-  if (
-    req.path.includes('manifest.json') || 
-    req.path.includes('.png') || 
-    req.path.includes('.ico') || 
-    req.path.includes('sw.js')
-  ) {
-    // Skip authentication for these public files
-    return next();
-  }
-  
-  // For all other routes, continue with normal middleware flow
-  next();
-});
-
-app.use(express.static(path.join(process.cwd(), 'dist/public')));
 
 // Client-side routing fallback
 app.get('*', (req: Request, res: Response) => {

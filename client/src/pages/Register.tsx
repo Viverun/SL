@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Shield, Eye, EyeOff, UserPlus, AlertCircle, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUser } from '@/lib/stores/useUser';
+import { storeAuthToken } from '@/lib/queryClient';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -42,7 +43,38 @@ const Register = () => {
     setLocalError(null);
     
     try {
-      // Register and automatically log in
+      // Direct API call to ensure we get and store the token properly
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ username, password })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to register');
+      }
+      
+      const data = await response.json();
+      
+      // Explicitly store token in localStorage
+      if (data.token) {
+        console.log('Registration successful, storing token directly:', data.token.substring(0, 10) + '...');
+        
+        // Store token both ways to ensure it works
+        localStorage.setItem('token', data.token);
+        storeAuthToken(data.token);
+        
+        // Verify token was stored
+        const storedToken = localStorage.getItem('token');
+        console.log('Token storage verification:', storedToken ? 'successful' : 'failed');
+      } else {
+        console.error('CRITICAL: No token received from registration API');
+      }
+      
+      // Also call the store's register method to update the UI state
       await register(username, password);
       
       toast.success('Registration successful!', {
@@ -50,8 +82,10 @@ const Register = () => {
         icon: <CheckCircle className="h-5 w-5 text-green-500" />
       });
       
-      // Redirect to home page
-      navigate('/');
+      // Add a slight delay before navigation to ensure token is saved
+      setTimeout(() => {
+        navigate('/');
+      }, 500);
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to register. Please try again.';
       setLocalError(errorMsg);

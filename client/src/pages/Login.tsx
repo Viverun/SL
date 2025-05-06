@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Shield, Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUser } from '@/lib/stores/useUser';
+import { storeAuthToken } from '@/lib/queryClient'; // Re-add this import
 
 const Login = () => {
   const navigate = useNavigate();
@@ -38,11 +39,51 @@ const Login = () => {
     setLocalError(null);
     
     try {
-      // Login using the user store
+      // Direct API call to get and store the token explicitly
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ username, password })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to login');
+      }
+      
+      const data = await response.json();
+      
+      // Explicitly store token in localStorage with extra logging
+      if (data.token) {
+        console.log('Login successful, storing token directly:', data.token.substring(0, 10) + '...');
+        
+        // Store token both ways to ensure it works
+        localStorage.setItem('token', data.token);
+        storeAuthToken(data.token);
+        
+        // Verify token was stored
+        const storedToken = localStorage.getItem('token');
+        console.log('Token storage verification:', storedToken ? 'successful' : 'failed');
+        
+        // Check if stored token matches
+        if (storedToken !== data.token) {
+          console.error('ALERT: Stored token does not match received token');
+        }
+      } else {
+        console.error('CRITICAL: No token received from login API');
+      }
+      
+      // Also call the store's login method to update UI state
       await login(username, password);
       
       toast.success(`Welcome back, ${username}!`);
-      navigate('/');
+      
+      // Add a slight delay before navigation to ensure token is saved
+      setTimeout(() => {
+        navigate('/');
+      }, 500);
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to login. Please try again.';
       setLocalError(errorMsg);
