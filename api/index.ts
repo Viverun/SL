@@ -1,4 +1,4 @@
-// Standalone API handler for Vercel serverless deployment
+// Standalone API handler for Vercel serverless functions
 import express from 'express';
 import session from 'express-session';
 import { drizzle } from "drizzle-orm/neon-serverless";
@@ -8,18 +8,18 @@ import * as argon2 from 'argon2';
 import path from 'path';
 import fs from 'fs';
 
-// Import schema directly to avoid cross-directory imports
-import { users, type User, type InsertUser, gameStates } from "../shared/schema";
+// Import shared schema and game logic directly
+import { users, gameStates } from "../shared/schema";
 import { createInitialUserState } from "../shared/game";
 
-// Create Express app for serverless environment
+// Create Express app
 const app = express();
 
 // Basic middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Session configuration for serverless environment
+// Session configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'solo-leveling-secret-key',
   resave: false,
@@ -31,19 +31,21 @@ app.use(session({
   }
 }));
 
-// Database connection setup
+// Database connection
 let db;
-if (process.env.DATABASE_URL) {
-  try {
+try {
+  if (process.env.DATABASE_URL) {
     const sql = neon(process.env.DATABASE_URL);
     db = drizzle(sql);
     console.log('Database connection established');
-  } catch (error) {
-    console.error('Failed to connect to database:', error);
+  } else {
+    console.warn('DATABASE_URL not found, database operations will fail');
   }
+} catch (error) {
+  console.error('Failed to connect to database:', error);
 }
 
-// Auth Routes
+// Authentication routes
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -52,7 +54,7 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ message: 'Username and password are required' });
     }
     
-    // Check if DB is connected
+    // Validate database connection
     if (!db) {
       return res.status(500).json({ message: 'Database connection not available' });
     }
@@ -89,7 +91,10 @@ app.post('/api/auth/register', async (req, res) => {
     res.status(201).json(userWithoutPassword);
   } catch (error) {
     console.error('Error registering user:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ 
+      message: 'Internal server error during registration',
+      error: process.env.NODE_ENV === 'production' ? undefined : error.message
+    });
   }
 });
 
@@ -101,7 +106,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ message: 'Username and password are required' });
     }
     
-    // Check if DB is connected
+    // Validate database connection
     if (!db) {
       return res.status(500).json({ message: 'Database connection not available' });
     }
@@ -128,7 +133,7 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(200).json(userWithoutPassword);
   } catch (error) {
     console.error('Error logging in user:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: 'Internal server error during login' });
   }
 });
 
@@ -154,7 +159,7 @@ app.get('/api/auth/me', async (req, res) => {
       return res.status(401).json({ message: 'Not authenticated' });
     }
     
-    // Check if DB is connected
+    // Validate database connection
     if (!db) {
       return res.status(500).json({ message: 'Database connection not available' });
     }
@@ -176,7 +181,7 @@ app.get('/api/auth/me', async (req, res) => {
   }
 });
 
-// Game Routes
+// Game routes
 app.get('/api/game/data', async (req, res) => {
   try {
     // Check if user is authenticated
@@ -184,32 +189,30 @@ app.get('/api/game/data', async (req, res) => {
       return res.status(401).json({ message: 'Not authenticated' });
     }
     
-    // Check if DB is connected
+    // Validate database connection
     if (!db) {
       return res.status(500).json({ message: 'Database connection not available' });
     }
     
     // Get game data
     const result = await db.select().from(gameStates).where(eq(gameStates.userId, req.session.userId)).limit(1);
-    const gameState = result[0];
     
-    if (!gameState) {
+    if (!result || result.length === 0) {
       return res.status(404).json({ message: 'Game data not found' });
     }
     
-    res.status(200).json(gameState.data);
+    res.status(200).json(result[0].data);
   } catch (error) {
     console.error('Error getting game data:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-// Basic static file serving for non-API routes
+// Static file serving
 app.use(express.static(path.join(process.cwd(), 'dist/public')));
 
-// Fallback for client-side routing
+// Client-side routing fallback
 app.get('*', (req, res) => {
-  // Skip API routes
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ message: 'API endpoint not found' });
   }
@@ -222,9 +225,9 @@ app.get('*', (req, res) => {
   }
 });
 
-// Error handling middleware
+// Global error handler
 app.use((err, req, res, next) => {
-  console.error('Express error:', err);
+  console.error('API error:', err);
   res.status(500).json({
     message: 'Internal server error',
     error: process.env.NODE_ENV === 'production' ? undefined : err.message
