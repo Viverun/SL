@@ -12,13 +12,41 @@ app.use(express.urlencoded({ extended: false }));
 function serveStaticForVercel(app) {
   const distPath = path.join(process.cwd(), 'dist/public');
   
-  // Serve static files
-  app.use(express.static(distPath));
+  // Handle specific asset types first
+  app.use('/assets', express.static(path.join(distPath, 'assets')));
   
-  // Fallback to index.html
+  // Handle service worker and manifest specifically
+  app.get('/sw.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.sendFile(path.join(distPath, 'sw.js'));
+  });
+  
+  app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.sendFile(path.join(distPath, 'manifest.json'));
+  });
+  
+  // Serve other static files
+  app.use(express.static(distPath, {
+    index: false // Don't automatically serve index.html
+  }));
+  
+  // Special handling for the root path - always serve index.html
+  app.get('/', (req, res) => {
+    const indexPath = path.join(distPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      res.setHeader('Content-Type', 'text/html');
+      res.sendFile(indexPath);
+    } else {
+      res.status(404).send('index.html not found');
+    }
+  });
+  
+  // Fallback for client-side routing
   app.use('*', (req, res) => {
     const indexPath = path.join(distPath, 'index.html');
     if (fs.existsSync(indexPath)) {
+      res.setHeader('Content-Type', 'text/html');
       res.sendFile(indexPath);
     } else {
       res.status(404).send('Not found: ' + indexPath);
