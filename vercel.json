@@ -12,6 +12,21 @@
   ],
   "routes": [
     {
+      "src": "/manifest.json",
+      "dest": "/dist/public/manifest.json",
+      "headers": { "cache-control": "public, max-age=31536000, immutable" }
+    },
+    {
+      "src": "/sw.js",
+      "dest": "/dist/public/sw.js",
+      "headers": { "cache-control": "public, max-age=0, must-revalidate" }
+    },
+    {
+      "src": "/(apple-touch-icon.png|pwa-192x192.png|pwa-512x512.png|favicon.ico)",
+      "dest": "/dist/public/$1",
+      "headers": { "cache-control": "public, max-age=31536000, immutable" }
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/index.ts"
     },
