@@ -26,10 +26,19 @@ const Home = () => {
   // Show loading state while checking auth
   if (isLoading || !gameData) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-950">
-        <div className="flex flex-col items-center">
-          <div className="h-12 w-12 rounded-full border-4 border-blue-500 border-t-transparent animate-spin mb-4"></div>
-          <p className="text-blue-400 font-medium">Loading your hunter data...</p>
+      <div className="flex items-center justify-center h-screen animated-gradient overflow-hidden">
+        <div className="relative">
+          {/* Decorative elements */}
+          <div className="absolute -top-40 -left-40 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-purple-600/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+          
+          <div className="flex flex-col items-center relative z-10">
+            <div className="h-16 w-16 rounded-full border-4 border-purple-500 border-t-transparent animate-spin mb-5 glow-border"></div>
+            <div className="text-center space-y-2">
+              <p className="text-xl text-purple-200 font-medium">Loading your hunter data...</p>
+              <p className="text-sm text-purple-300/70">Preparing your Solo Leveling journey</p>
+            </div>
+          </div>
         </div>
       </div>
     );

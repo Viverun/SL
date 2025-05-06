@@ -54,57 +54,65 @@ const Login = () => {
   };
   
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-900 to-black p-4">
+    <div className="min-h-screen flex items-center justify-center animated-gradient p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
+        className="w-full max-w-md relative"
       >
+        {/* Decorative orbs */}
+        <div className="absolute -top-24 -left-24 w-48 h-48 bg-purple-600/20 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl"></div>
+        
         <div className="flex justify-center mb-6">
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ duration: 0.5, delay: 0.2, type: 'spring' }}
-            className="bg-blue-900/30 p-4 rounded-full"
+            className="bg-gradient-to-br from-purple-900/70 to-purple-600/70 p-5 rounded-full glow-border"
           >
-            <Shield className="h-12 w-12 text-blue-400" />
+            <Shield className="h-14 w-14 text-purple-300 glow-text" />
           </motion.div>
         </div>
         
-        <Card className="bg-gray-900/80 backdrop-blur-sm border-blue-900/50">
+        <Card className="bg-black/80 backdrop-blur-sm border-purple-900/50 hover-scale glow-border">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center text-blue-400">
+            <CardTitle className="text-3xl font-bold text-center gradient-text">
               Solo Leveling
             </CardTitle>
-            <CardDescription className="text-center text-gray-400">
+            <CardDescription className="text-center text-purple-200">
               Enter your credentials to access your hunter profile
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
               {(localError || storeError) && (
-                <div className="bg-red-900/20 border border-red-900/50 rounded-md p-3 flex items-start">
-                  <AlertCircle className="h-5 w-5 text-red-500 mr-2 mt-0.5" />
-                  <span className="text-sm text-red-400">{localError || storeError}</span>
-                </div>
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-red-900/20 border border-red-700/50 rounded-md p-3 flex items-start"
+                >
+                  <AlertCircle className="h-5 w-5 text-red-400 mr-2 mt-0.5" />
+                  <span className="text-sm text-red-300">{localError || storeError}</span>
+                </motion.div>
               )}
               
               <div className="space-y-2">
-                <Label htmlFor="username" className="text-gray-300">Username</Label>
+                <Label htmlFor="username" className="text-purple-200 font-medium">Username</Label>
                 <Input
                   id="username"
                   type="text"
                   placeholder="Enter your username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-gray-200"
+                  className="bg-black/50 border-purple-900/50 text-white focus:border-purple-500 focus:ring-purple-500/50"
                   disabled={isLoading}
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-gray-300">Password</Label>
+                <Label htmlFor="password" className="text-purple-200 font-medium">Password</Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -112,14 +120,14 @@ const Login = () => {
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="bg-gray-800 border-gray-700 text-gray-200 pr-10"
+                    className="bg-black/50 border-purple-900/50 text-white pr-10 focus:border-purple-500 focus:ring-purple-500/50"
                     disabled={isLoading}
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="absolute right-0 top-0 h-full px-3 text-gray-400 hover:text-gray-300"
+                    className="absolute right-0 top-0 h-full px-3 text-purple-400 hover:text-purple-300"
                     onClick={() => setShowPassword(!showPassword)}
                   >
                     {showPassword ? (
@@ -131,29 +139,34 @@ const Login = () => {
                 </div>
               </div>
               
-              <Button
-                type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium"
-                disabled={isLoading}
+              <motion.div
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.98 }}
               >
-                {isLoading ? (
-                  <div className="flex items-center">
-                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                    <span>Logging in...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center">
-                    <LogIn className="h-5 w-5 mr-2" />
-                    <span>Login</span>
-                  </div>
-                )}
-              </Button>
+                <Button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-purple-700 to-purple-500 hover:from-purple-600 hover:to-purple-400 text-white font-medium border-0 pulse"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      <span>Logging in...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center">
+                      <LogIn className="h-5 w-5 mr-2" />
+                      <span>Login</span>
+                    </div>
+                  )}
+                </Button>
+              </motion.div>
             </form>
           </CardContent>
           <CardFooter className="flex flex-col space-y-2">
-            <div className="text-sm text-center text-gray-500">
+            <div className="text-sm text-center text-purple-300">
               Don't have an account?{' '}
-              <Link to="/register" className="text-blue-400 hover:text-blue-300 font-medium">
+              <Link to="/register" className="text-purple-400 hover:text-purple-300 font-medium underline">
                 Register here
               </Link>
             </div>

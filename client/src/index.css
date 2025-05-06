@@ -2,18 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --purple-dark: #1a0033;
+  --purple-medium: #5b21b6;
+  --purple-light: #8b5cf6;
+  --purple-glow: #a855f7;
+  --accent-purple: #c026d3;
+  --accent-pink: #db2777;
+  --black-deep: #030303;
+  --black-rich: #0a0a0a;
+  --black-medium: #121212;
+}
+
 @layer base {
   * {
     @apply border-border;
   }
 
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased;
     margin: 0;
     padding: 0;
     overflow: hidden;
     width: 100vw;
     height: 100vh;
+    background: linear-gradient(135deg, var(--black-deep) 0%, var(--purple-dark) 100%);
+    color: #fff;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--black-medium);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--purple-medium);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--purple-light);
   }
 }
 
@@ -27,4 +60,66 @@ canvas {
   width: 100% !important;
   height: 100% !important;
   touch-action: none;
+}
+
+/* Animation classes */
+.glow-text {
+  text-shadow: 0 0 10px var(--purple-glow), 0 0 20px var(--purple-glow);
+}
+
+.glow-border {
+  box-shadow: 0 0 10px var(--purple-glow), 0 0 5px var(--purple-light);
+}
+
+.hover-scale {
+  transition: transform 0.2s ease-in-out;
+}
+
+.hover-scale:hover {
+  transform: scale(1.05);
+}
+
+/* Gradient text effects */
+.gradient-text {
+  background: linear-gradient(90deg, var(--purple-light), var(--accent-pink));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-fill-color: transparent;
+}
+
+/* Animated gradient backgrounds */
+.animated-gradient {
+  background: linear-gradient(-45deg, var(--purple-dark), var(--purple-medium), var(--accent-purple), var(--accent-pink));
+  background-size: 400% 400%;
+  animation: gradient 15s ease infinite;
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Pulsing animation */
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(139, 92, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
+  }
 }

@@ -52,7 +52,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Suspense fallback={<div className="w-full h-screen bg-black flex items-center justify-center text-blue-400">Loading...</div>}>
+        <Suspense fallback={
+          <div className="w-full h-screen animated-gradient flex flex-col items-center justify-center">
+            <div className="w-16 h-16 rounded-full border-4 border-purple-600 border-t-transparent animate-spin mb-4"></div>
+            <div className="gradient-text text-xl font-bold">Loading your adventure...</div>
+          </div>
+        }>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
@@ -67,9 +72,11 @@ function App() {
           richColors 
           toastOptions={{
             style: { 
-              background: 'rgba(12, 12, 14, 0.8)', 
-              color: '#3b82f6',
-              border: '1px solid #1d4ed8',
+              background: 'rgba(5, 5, 10, 0.85)', 
+              color: '#c4b5fd',
+              border: '1px solid rgba(139, 92, 246, 0.5)',
+              boxShadow: '0 0 15px rgba(139, 92, 246, 0.3)',
+              backdropFilter: 'blur(10px)',
             },
             className: "font-sans"
           }}
