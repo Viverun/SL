@@ -2,6 +2,14 @@ import { create } from "zustand";
 import { User } from "@shared/game";
 import { apiRequest } from "@/lib/queryClient";
 
+// Helper functions for token management
+const saveToken = (token: string) => localStorage.setItem('token', token);
+const removeToken = () => localStorage.removeItem('token');
+const getToken = () => localStorage.getItem('token');
+
+// Check if token exists to determine initial auth state
+const hasInitialToken = !!getToken();
+
 interface UserState {
   // User authentication state
   isAuthenticated: boolean;
@@ -23,8 +31,8 @@ interface UserState {
 }
 
 export const useUser = create<UserState>((set, get) => ({
-  // Initial state
-  isAuthenticated: false,
+  // Initial state - check for existing token
+  isAuthenticated: hasInitialToken,
   userId: null,
   username: null,
   gameData: null,
@@ -39,10 +47,15 @@ export const useUser = create<UserState>((set, get) => ({
       const res = await apiRequest('POST', '/api/auth/login', { username, password });
       const userData = await res.json();
       
+      // Save JWT token in localStorage
+      if (userData.token) {
+        saveToken(userData.token);
+      }
+      
       set({ 
         isAuthenticated: true,
-        userId: userData.id, 
-        username: userData.username,
+        userId: userData.user.id, 
+        username: userData.user.username,
         isLoading: false 
       });
       
@@ -62,10 +75,23 @@ export const useUser = create<UserState>((set, get) => ({
     
     try {
       // Register the user
-      await apiRequest('POST', '/api/auth/register', { username, password });
+      const res = await apiRequest('POST', '/api/auth/register', { username, password });
+      const userData = await res.json();
       
-      // After registration, log the user in
-      await get().login(username, password);
+      // Save JWT token in localStorage
+      if (userData.token) {
+        saveToken(userData.token);
+      }
+      
+      set({ 
+        isAuthenticated: true,
+        userId: userData.user.id, 
+        username: userData.user.username,
+        isLoading: false 
+      });
+      
+      // After registration, fetch game data
+      await get().fetchGameData();
     } catch (err: any) {
       set({ 
         isLoading: false, 
@@ -88,6 +114,9 @@ export const useUser = create<UserState>((set, get) => ({
         gameData: null,
         isLoading: false
       });
+      
+      // Remove token
+      removeToken();
     } catch (err: any) {
       set({ 
         isLoading: false, 
