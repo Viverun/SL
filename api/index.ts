@@ -27,6 +27,19 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Add CORS headers to support cross-origin requests
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
+  next();
+});
+
 // Session configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'solo-leveling-secret-key',
@@ -35,35 +48,39 @@ app.use(session({
   cookie: { 
     secure: process.env.NODE_ENV === 'production',
     maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-    sameSite: 'lax'
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
   }
 }));
 
 // Database connection
-let db: NeonDatabase | undefined;
-try {
-  if (process.env.DATABASE_URL) {
+const connectToDatabase = () => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      console.warn('DATABASE_URL not found, database operations will fail');
+      return undefined;
+    }
+
+    // Create a new connection for each request (important for serverless)
     const sql = neon(process.env.DATABASE_URL);
-    // Fix the drizzle initialization with proper typing
-    db = drizzle(sql as any);
-    console.log('Database connection established');
-  } else {
-    console.warn('DATABASE_URL not found, database operations will fail');
+    return drizzle(sql as any);
+  } catch (error: unknown) {
+    console.error('Failed to connect to database:', error);
+    return undefined;
   }
-} catch (error: unknown) {
-  console.error('Failed to connect to database:', error);
-}
+};
 
 // Authentication routes
 app.post('/api/auth/register', async (req: Request, res: Response) => {
   try {
+    console.log('Register request received:', req.body);
     const { username, password } = req.body;
     
     if (!username || !password) {
       return res.status(400).json({ message: 'Username and password are required' });
     }
     
-    // Validate database connection
+    // Connect to database for this request
+    const db = connectToDatabase();
     if (!db) {
       return res.status(500).json({ message: 'Database connection not available' });
     }
@@ -115,7 +132,8 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Username and password are required' });
     }
     
-    // Validate database connection
+    // Connect to database for this request
+    const db = connectToDatabase();
     if (!db) {
       return res.status(500).json({ message: 'Database connection not available' });
     }
@@ -171,7 +189,8 @@ app.get('/api/auth/me', async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Not authenticated' });
     }
     
-    // Validate database connection
+    // Connect to database for this request
+    const db = connectToDatabase();
     if (!db) {
       return res.status(500).json({ message: 'Database connection not available' });
     }
@@ -204,7 +223,8 @@ app.get('/api/game/data', async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Not authenticated' });
     }
     
-    // Validate database connection
+    // Connect to database for this request
+    const db = connectToDatabase();
     if (!db) {
       return res.status(500).json({ message: 'Database connection not available' });
     }
